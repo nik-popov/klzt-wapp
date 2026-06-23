@@ -63,6 +63,33 @@ export function useProcess() {
           ),
         });
       }
+      if (res.warning) {
+        // Bubble Gemini failure to the user: the byte-copy fallback ran so
+        // the item flipped to 'ready' but the image is unchanged.
+        console.warn('Magic Fix fell back:', res.warning);
+        alert(`Magic Fix couldn't reach Gemini, so the image wasn't changed.\n\n${res.warning}`);
+      }
+    },
+    onError: (_err, _id, ctx) => {
+      if (ctx?.previous) qc.setQueryData(ITEMS_KEY, ctx.previous);
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ITEMS_KEY }),
+  });
+}
+
+export function useDelete() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete(id),
+    onMutate: async (id) => {
+      await qc.cancelQueries({ queryKey: ITEMS_KEY });
+      const previous = qc.getQueryData<ListItemsResponse>(ITEMS_KEY);
+      if (previous) {
+        qc.setQueryData<ListItemsResponse>(ITEMS_KEY, {
+          items: previous.items.filter((it) => it.id !== id),
+        });
+      }
+      return { previous };
     },
     onError: (_err, _id, ctx) => {
       if (ctx?.previous) qc.setQueryData(ITEMS_KEY, ctx.previous);

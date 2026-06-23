@@ -1,7 +1,8 @@
 import { Hono } from 'hono';
 import type { Env } from '../types';
 import { rowToItem } from '../types';
-import { listItems, reorderItems } from '../db/queries';
+import { deleteItem, getItem, listItems, reorderItems } from '../db/queries';
+import { keyFromUrl } from '../lib/storage';
 import type {
   ListItemsResponse,
   ReorderRequest,
@@ -47,6 +48,33 @@ items.put('/reorder', async (c) => {
       400,
     );
   }
+});
+
+/**
+ * DELETE /api/items/:id
+ * Removes the row from D1 and deletes any matching R2 objects (raw and
+ * processed). External-URL items (e.g. demo placehold rows) skip R2
+ * cleanup automatically since keyFromUrl returns null for them.
+ */
+items.delete('/:id', async (c) => {
+  const id = c.req.param('id');
+  const row = await getItem(c.env, id);
+  if (!row) return c.json({ error: 'Item not found' }, 404);
+
+  const keys = [
+    keyFromUrl(c.env, row.raw_image_url),
+    keyFromUrl(c.env, row.processed_image_url),
+  ].filter((k): k is string => Boolean(k));
+
+  if (keys.length > 0) {
+    // R2Bucket.delete accepts a single key or an array (up to 1000).
+    await c.env.BUCKET.delete(keys);
+  }
+
+  const removed = await deleteItem(c.env, id);
+  if (!removed) return c.json({ error: 'Item not found' }, 404);
+
+  return c.json({ ok: true, id, item: rowToItem(row) });
 });
 
 export default items;

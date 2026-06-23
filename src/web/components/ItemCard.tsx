@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import clsx from 'clsx';
@@ -6,10 +7,11 @@ import type { Item } from '@shared/types';
 interface ItemCardProps {
   item: Item;
   onProcess: (id: string) => void;
+  onOpen: (item: Item) => void;
   sortable?: boolean;
 }
 
-export function ItemCard({ item, onProcess, sortable = true }: ItemCardProps) {
+export function ItemCard({ item, onProcess, onOpen, sortable = true }: ItemCardProps) {
   const sortableState = useSortable({ id: item.id, disabled: !sortable });
   const {
     attributes,
@@ -24,6 +26,11 @@ export function ItemCard({ item, onProcess, sortable = true }: ItemCardProps) {
     transform: CSS.Transform.toString(transform),
     transition,
   };
+
+  // Distinguish click (tap) from drag: capture pointerdown pos, only
+  // fire onOpen if pointerup is within a small threshold (dnd-kit's
+  // activationConstraint already suppresses drag below 6px).
+  const downAt = useRef<{ x: number; y: number } | null>(null);
 
   const displayUrl = item.processed_image_url ?? item.raw_image_url;
   const subtitle = item.metadata?.brand?.toString() ?? 'Untitled';
@@ -40,10 +47,27 @@ export function ItemCard({ item, onProcess, sortable = true }: ItemCardProps) {
       <div
         {...attributes}
         {...listeners}
+        role="button"
+        tabIndex={0}
+        onPointerDownCapture={(e) => {
+          downAt.current = { x: e.clientX, y: e.clientY };
+        }}
+        onPointerUp={(e) => {
+          const start = downAt.current;
+          downAt.current = null;
+          if (!start) return;
+          const dx = Math.abs(e.clientX - start.x);
+          const dy = Math.abs(e.clientY - start.y);
+          // Below the drag-activation threshold => treat as a click.
+          if (dx < 6 && dy < 6 && !isDragging) onOpen(item);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') onOpen(item);
+        }}
         className={clsx(
           'relative aspect-square overflow-hidden rounded-xl border border-neutral-200 bg-neutral-100 shadow-sm transition',
-          'group-hover:shadow-md',
-          sortable && 'cursor-grab active:cursor-grabbing',
+          'group-hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/30',
+          sortable ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer',
         )}
       >
         <img
@@ -68,6 +92,22 @@ export function ItemCard({ item, onProcess, sortable = true }: ItemCardProps) {
               className="pointer-events-auto rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-neutral-900 shadow-md hover:bg-neutral-100"
             >
               ✨ Magic Fix
+            </button>
+          </div>
+        )}
+
+        {item.status === 'ready' && (
+          <div className="pointer-events-none absolute inset-0 flex items-end justify-center bg-gradient-to-t from-black/40 via-black/0 to-transparent p-3 opacity-0 transition group-hover:opacity-100">
+            <button
+              type="button"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                onProcess(item.id);
+              }}
+              className="pointer-events-auto rounded-full bg-white/90 px-3 py-1.5 text-xs font-semibold text-neutral-900 shadow-md hover:bg-white"
+            >
+              ✨ Re-fix
             </button>
           </div>
         )}

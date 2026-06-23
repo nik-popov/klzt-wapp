@@ -1,5 +1,5 @@
 -- 0001_init.sql
--- Initial schema for FlashCloset.
+-- Initial schema for KLZT.
 --
 -- V2 attribute roadmap (brand, color, pattern, material, item_type, fit,
 -- occasion, size, tag, season, notes) lives inside the `metadata` JSON

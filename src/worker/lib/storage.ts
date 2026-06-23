@@ -54,3 +54,25 @@ export function publicUrlForKey(env: Env, key: string): string {
   if (base) return `${base.replace(/\/$/, '')}/${key}`;
   return `/api/r2/${key}`;
 }
+
+/**
+ * Inverse of publicUrlForKey: best-effort extraction of an R2 key from a
+ * stored URL. Returns null when the URL doesn't point at our bucket
+ * (e.g. external placehold.co demo images) — caller should skip R2
+ * cleanup in that case.
+ */
+export function keyFromUrl(env: Env, url: string | null | undefined): string | null {
+  if (!url) return null;
+  // Strip any cache-busting query string (e.g. ?v=1719090000000) before
+  // matching. R2 keys never contain '?'.
+  const clean = url.split('?')[0];
+  if (clean.startsWith('/api/r2/')) {
+    return decodeURIComponent(clean.slice('/api/r2/'.length));
+  }
+  const base = env.R2_PUBLIC_BASE_URL?.trim();
+  if (base) {
+    const prefix = base.replace(/\/$/, '') + '/';
+    if (clean.startsWith(prefix)) return decodeURIComponent(clean.slice(prefix.length));
+  }
+  return null;
+}

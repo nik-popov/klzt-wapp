@@ -75,6 +75,13 @@ export async function updateItemStatus(
     .run();
 }
 
+export async function deleteItem(env: Env, id: string): Promise<boolean> {
+  const result = await env.DB.prepare(`DELETE FROM items WHERE id = ?`)
+    .bind(id)
+    .run();
+  return (result.meta?.changes ?? 0) > 0;
+}
+
 /**
  * Rewrite sort_order for the given ids in a single D1 batch transaction.
  * Position in the array = new sort_order.

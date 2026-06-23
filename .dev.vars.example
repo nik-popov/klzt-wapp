@@ -6,3 +6,11 @@ AUTH_TOKEN=""
 # set this and image URLs will point there directly instead of
 # being proxied through the Worker (/api/r2/<key>).
 R2_PUBLIC_BASE_URL=""
+
+# Magic Fix — Google Gemini 2.5 Flash Image (Nano Banana).
+# Get a free key at https://aistudio.google.com/apikey
+# When empty, Magic Fix falls back to a no-op byte copy.
+GEMINI_API_KEY=""
+
+# Optional model override. Defaults to gemini-2.5-flash-image.
+GEMINI_MODEL=""

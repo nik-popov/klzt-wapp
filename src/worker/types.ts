@@ -7,6 +7,8 @@ export interface Env {
   APP_ENV: string;
   AUTH_TOKEN?: string;
   R2_PUBLIC_BASE_URL?: string;
+  GEMINI_API_KEY?: string;
+  GEMINI_MODEL?: string;
 }
 
 /** Raw row shape as returned by D1. metadata is a JSON string or null. */

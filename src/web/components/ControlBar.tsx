@@ -26,7 +26,7 @@ export function ControlBar({
   return (
     <header className="sticky top-0 z-20 border-b border-neutral-200/70 bg-white/80 backdrop-blur">
       <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3">
-        <h1 className="text-lg font-semibold tracking-tight">FlashCloset</h1>
+        <h1 className="text-lg font-semibold tracking-tight">KLZT</h1>
 
         <div className="ml-auto flex items-center gap-2">
           <label className="text-xs text-neutral-500" htmlFor="sort-select">

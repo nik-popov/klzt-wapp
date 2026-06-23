@@ -1,4 +1,5 @@
 import type {
+  DeleteResponse,
   ListItemsResponse,
   ProcessResponse,
   ReorderRequest,
@@ -6,7 +7,7 @@ import type {
   UploadResponse,
 } from '@shared/types';
 
-const TOKEN_KEY = 'flashcloset.authToken';
+const TOKEN_KEY = 'klzt.authToken';
 
 export function getAuthToken(): string {
   if (typeof window === 'undefined') return '';
@@ -81,6 +82,12 @@ export const api = {
   process(id: string): Promise<ProcessResponse> {
     return request<ProcessResponse>(`/api/items/${encodeURIComponent(id)}/process`, {
       method: 'POST',
+    });
+  },
+
+  delete(id: string): Promise<DeleteResponse> {
+    return request<DeleteResponse>(`/api/items/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
     });
   },
 };

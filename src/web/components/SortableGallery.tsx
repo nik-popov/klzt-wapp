@@ -23,6 +23,7 @@ interface SortableGalleryProps {
   sortMode: SortMode;
   onReorder: (ids: string[]) => void;
   onProcess: (id: string) => void;
+  onOpen: (item: Item) => void;
 }
 
 export function SortableGallery({
@@ -30,6 +31,7 @@ export function SortableGallery({
   sortMode,
   onReorder,
   onProcess,
+  onOpen,
 }: SortableGalleryProps) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -97,6 +99,7 @@ export function SortableGallery({
               key={item.id}
               item={item}
               onProcess={onProcess}
+              onOpen={onOpen}
               sortable={sortable}
             />
           ))}

@@ -1,5 +1,5 @@
 {
-  "name": "flashcloset",
+  "name": "klzt",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -9,8 +9,13 @@
     "dev:worker": "wrangler dev",
     "build": "vite build",
     "deploy": "npm run build && wrangler deploy",
-    "db:migrate:local": "wrangler d1 migrations apply flashcloset --local",
-    "db:migrate:remote": "wrangler d1 migrations apply flashcloset --remote",
+    "db:migrate:local": "wrangler d1 migrations apply klzt --local",
+    "db:migrate:remote": "wrangler d1 migrations apply klzt --remote",
+    "db:seed:local": "wrangler d1 execute klzt --local --file=./seeds/demo.sql",
+    "db:seed:remote": "wrangler d1 execute klzt --remote --file=./seeds/demo.sql",
+    "seed:r2:local": "bash seeds/upload-r2.sh local",
+    "seed:r2:remote": "bash seeds/upload-r2.sh remote",
+    "setup:local": "npm run db:migrate:local && npm run db:seed:local && npm run seed:r2:local",
     "typecheck": "tsc -b",
     "lint": "eslint \"src/**/*.{ts,tsx}\""
   },

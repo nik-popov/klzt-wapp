@@ -51,6 +51,16 @@ export interface ReorderResponse {
 
 export interface ProcessResponse {
   item: Item;
+  /** Which path produced the processed image. */
+  processedBy?: 'gemini' | 'fallback';
+  /** Populated when the Gemini call failed and we fell back. */
+  warning?: string;
+}
+
+export interface DeleteResponse {
+  ok: true;
+  id: string;
+  item: Item;
 }
 
 export interface ApiErrorBody {
