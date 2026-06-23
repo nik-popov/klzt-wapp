@@ -1,0 +1,8 @@
+# Copy to .dev.vars (gitignored) for `wrangler dev`.
+# Leave AUTH_TOKEN empty to disable auth in local dev.
+AUTH_TOKEN=""
+
+# Optional. If the R2 bucket is fronted by a public custom domain,
+# set this and image URLs will point there directly instead of
+# being proxied through the Worker (/api/r2/<key>).
+R2_PUBLIC_BASE_URL=""

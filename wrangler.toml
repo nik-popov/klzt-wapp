@@ -1,0 +1,28 @@
+name = "flashcloset"
+main = "src/worker/index.ts"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+# Static assets binding (built Vite SPA). The Worker falls through to
+# env.ASSETS.fetch(request) for anything that isn't /api/*.
+[assets]
+directory = "./dist/client"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+
+[vars]
+APP_ENV = "dev"
+
+# AUTH_TOKEN is provided via `wrangler secret put AUTH_TOKEN` in prod,
+# or via .dev.vars locally. See .dev.vars.example.
+
+[[d1_databases]]
+binding = "DB"
+database_name = "flashcloset"
+database_id = "00000000-0000-0000-0000-000000000000"
+migrations_dir = "migrations"
+
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "flashcloset-bucket"
+preview_bucket_name = "flashcloset-bucket-dev"
