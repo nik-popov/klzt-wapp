@@ -1,0 +1,20 @@
+name = "flashcloset"
+main = "src/index.ts"
+compatibility_date = "2024-06-01"
+compatibility_flags = ["nodejs_compat"]
+
+[site]
+bucket = "./dist/frontend"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "flashcloset-db"
+database_id = "replace-with-your-d1-database-id"
+
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "flashcloset-images"
+
+[dev]
+port = 8787
+local_protocol = "http"
