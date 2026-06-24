@@ -33,7 +33,12 @@ export function ItemCard({ item, onProcess, onOpen, sortable = true }: ItemCardP
   const downAt = useRef<{ x: number; y: number } | null>(null);
 
   const displayUrl = item.processed_image_url ?? item.raw_image_url;
-  const subtitle = item.metadata?.brand?.toString() ?? 'Untitled';
+  // Prefer the auto-generated title, fall back to brand or a generic
+  // placeholder so cards always show *something* below the image.
+  const title =
+    (typeof item.metadata?.title === 'string' && item.metadata.title) ||
+    (typeof item.metadata?.brand === 'string' && item.metadata.brand) ||
+    'Untitled';
 
   return (
     <div
@@ -72,7 +77,7 @@ export function ItemCard({ item, onProcess, onOpen, sortable = true }: ItemCardP
       >
         <img
           src={displayUrl}
-          alt={subtitle}
+          alt={title}
           loading="lazy"
           draggable={false}
           className="h-full w-full select-none object-cover"
@@ -119,7 +124,9 @@ export function ItemCard({ item, onProcess, onOpen, sortable = true }: ItemCardP
         )}
       </div>
 
-      <div className="truncate px-1 text-xs text-neutral-500">{subtitle}</div>
+      <div className="truncate px-1 text-xs font-medium text-neutral-700" title={title}>
+        {title}
+      </div>
     </div>
   );
 }

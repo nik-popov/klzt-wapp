@@ -19,7 +19,6 @@ const METADATA_FIELDS: Array<{ key: keyof ItemMetadata; label: string }> = [
   { key: 'occasion', label: 'Occasion' },
   { key: 'size', label: 'Size' },
   { key: 'season', label: 'Season' },
-  { key: 'tag', label: 'Tag' },
   { key: 'notes', label: 'Notes' },
 ];
 
@@ -45,7 +44,11 @@ export function ItemDetail({ item, onClose, onProcess, onDelete }: ItemDetailPro
     const v = meta[key];
     return typeof v === 'string' && v.length > 0;
   });
+  const tags = Array.isArray(meta.tags)
+    ? meta.tags.filter((t): t is string => typeof t === 'string' && t.length > 0)
+    : [];
   const title =
+    (typeof meta.title === 'string' && meta.title) ||
     (typeof meta.brand === 'string' && meta.brand) ||
     (typeof meta.item_type === 'string' && meta.item_type) ||
     'Untitled item';
@@ -102,9 +105,21 @@ export function ItemDetail({ item, onClose, onProcess, onDelete }: ItemDetailPro
             </dl>
           ) : (
             <p className="text-sm text-neutral-500">
-              No metadata yet. V2 will let you tag brand, type, color, season,
-              and more.
+              No metadata yet. Magic Fix will auto-analyze this item.
             </p>
+          )}
+
+          {tags.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {tags.map((t) => (
+                <span
+                  key={t}
+                  className="rounded-full bg-neutral-100 px-2.5 py-0.5 text-xs font-medium text-neutral-700"
+                >
+                  {t}
+                </span>
+              ))}
+            </div>
           )}
 
           {item.status === 'processing' ? (

@@ -75,6 +75,40 @@ export async function updateItemStatus(
     .run();
 }
 
+/**
+ * Merge a partial metadata patch into the existing JSON blob. Pass
+ * `replace: true` to overwrite entirely (used when re-analyzing).
+ * Returns the latest row.
+ */
+export async function updateItemMetadata(
+  env: Env,
+  id: string,
+  patch: Record<string, unknown>,
+  opts: { replace?: boolean } = {},
+): Promise<ItemRow | null> {
+  const current = await getItem(env, id);
+  if (!current) return null;
+  let merged: Record<string, unknown>;
+  if (opts.replace) {
+    merged = { ...patch };
+  } else {
+    let existing: Record<string, unknown> = {};
+    if (current.metadata) {
+      try {
+        existing = JSON.parse(current.metadata) as Record<string, unknown>;
+      } catch {
+        existing = {};
+      }
+    }
+    merged = { ...existing, ...patch };
+  }
+  const json = Object.keys(merged).length > 0 ? JSON.stringify(merged) : null;
+  await env.DB.prepare(`UPDATE items SET metadata = ? WHERE id = ?`)
+    .bind(json, id)
+    .run();
+  return getItem(env, id);
+}
+
 export async function deleteItem(env: Env, id: string): Promise<boolean> {
   const result = await env.DB.prepare(`DELETE FROM items WHERE id = ?`)
     .bind(id)

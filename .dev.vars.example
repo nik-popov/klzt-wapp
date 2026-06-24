@@ -12,5 +12,8 @@ R2_PUBLIC_BASE_URL=""
 # When empty, Magic Fix falls back to a no-op byte copy.
 GEMINI_API_KEY=""
 
-# Optional model override. Defaults to gemini-2.5-flash-image.
+# Optional model overrides.
+# GEMINI_MODEL       -> image generation (default: gemini-2.5-flash-image)
+# GEMINI_TEXT_MODEL  -> auto-analysis    (default: gemini-2.5-flash)
 GEMINI_MODEL=""
+GEMINI_TEXT_MODEL=""

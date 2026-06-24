@@ -3,6 +3,7 @@ import type { Env, ItemRow } from '../types';
 import { rowToItem } from '../types';
 import {
   getItem,
+  updateItemMetadata,
   updateItemProcessed,
   updateItemStatus,
 } from '../db/queries';
@@ -11,6 +12,15 @@ import {
   processedKey,
   publicUrlForKey,
 } from '../lib/storage';
+import {
+  DEFAULT_IMAGE_MODEL,
+  analyzeImage,
+  base64ToBytes,
+  bytesToBase64,
+  imageExtFromMime,
+  normalizeMime,
+  sniffMime,
+} from '../lib/gemini';
 import type { ProcessResponse } from '@shared/types';
 
 const process = new Hono<{ Bindings: Env }>();
@@ -22,8 +32,6 @@ const MAGIC_FIX_PROMPT =
   'Centered composition, soft even lighting, sharp focus, true colors, ' +
   'e-commerce catalog style.';
 
-const DEFAULT_MODEL = 'gemini-2.5-flash-image';
-
 /**
  * POST /api/items/:id/process
  *
@@ -33,8 +41,7 @@ const DEFAULT_MODEL = 'gemini-2.5-flash-image';
  *      MAGIC_FIX_PROMPT. Falls back to a byte copy if GEMINI_API_KEY
  *      is unset or the call fails — so the demo path still works.
  *   3. Write processed/items/<id>.<ext> to R2 and flip status to 'ready'.
- *
- * Re-runnable on items already in 'ready' (overwrites processed).
+ *   4. Re-analyze the processed image to refresh title/tags/attrs.
  */
 process.post('/:id/process', async (c) => {
   const id = c.req.param('id');
@@ -72,7 +79,7 @@ process.post('/:id/process', async (c) => {
     console.warn('Gemini Magic Fix failed, falling back to byte copy:', lastError);
   }
 
-  const outExt = extFromMime(outMime);
+  const outExt = imageExtFromMime(outMime);
   const destKey = processedKey(id, outExt);
   await c.env.BUCKET.put(destKey, outBytes, {
     httpMetadata: { contentType: outMime },
@@ -83,13 +90,25 @@ process.post('/:id/process', async (c) => {
   // browser would serve the stale processed image. A ?v=<ts> query is
   // ignored by R2 and the Worker proxy but breaks the browser cache.
   const versionedUrl = `${publicUrlForKey(c.env, destKey)}?v=${Date.now()}`;
-  const updated = await updateItemProcessed(
+  let updated = await updateItemProcessed(
     c.env,
     id,
     versionedUrl,
     'ready',
   );
   if (!updated) return c.json({ error: 'Item disappeared mid-process' }, 500);
+
+  // Re-analyze using the cleaner processed image. Best-effort — failures
+  // here don't block the response since the fix itself already succeeded.
+  try {
+    const meta = await analyzeImage(c.env, outBytes, outMime);
+    if (meta && Object.keys(meta).length > 0) {
+      const reanalyzed = await updateItemMetadata(c.env, id, meta);
+      if (reanalyzed) updated = reanalyzed;
+    }
+  } catch (err) {
+    console.warn('Gemini re-analyze failed:', err);
+  }
 
   const body: ProcessResponse = {
     item: rowToItem(updated),
@@ -103,8 +122,7 @@ process.post('/:id/process', async (c) => {
  * Pull raw bytes for processing. If raw_image_url points at our R2
  * (Worker proxy or public custom domain), read from the bucket;
  * otherwise fetch the external URL so seeded demo rows with
- * placehold.co URLs can still be re-fixed. Returns bytes + sniffed
- * MIME so we can hand Gemini the right content type.
+ * placehold.co URLs can still be re-fixed.
  */
 async function loadSourceBytes(
   env: Env,
@@ -143,7 +161,7 @@ async function runMagicFix(
   const key = env.GEMINI_API_KEY?.trim();
   if (!key) throw new Error('GEMINI_API_KEY not set');
 
-  const model = env.GEMINI_MODEL?.trim() || DEFAULT_MODEL;
+  const model = env.GEMINI_MODEL?.trim() || DEFAULT_IMAGE_MODEL;
   const url =
     `https://generativelanguage.googleapis.com/v1beta/models/` +
     `${encodeURIComponent(model)}:generateContent`;
@@ -181,7 +199,7 @@ async function runMagicFix(
     throw new Error(`Gemini HTTP ${res.status}: ${text.slice(0, 300)}`);
   }
 
-  const json = (await res.json()) as GeminiResponse;
+  const json = (await res.json()) as GeminiImageResponse;
   const parts = json.candidates?.[0]?.content?.parts ?? [];
   for (const p of parts) {
     const inline = p.inlineData ?? p.inline_data;
@@ -205,56 +223,8 @@ interface GeminiPart {
   inlineData?: GeminiInlineData;
   inline_data?: GeminiInlineData;
 }
-interface GeminiResponse {
+interface GeminiImageResponse {
   candidates?: Array<{ content?: { parts?: GeminiPart[] } }>;
-}
-
-function normalizeMime(mime: string): string {
-  const m = mime.toLowerCase();
-  if (m === 'image/jpg') return 'image/jpeg';
-  return m;
-}
-
-function extFromMime(mime: string): string {
-  switch (normalizeMime(mime)) {
-    case 'image/png':
-      return 'png';
-    case 'image/webp':
-      return 'webp';
-    case 'image/jpeg':
-      return 'jpg';
-    default:
-      return 'png';
-  }
-}
-
-/** First-bytes sniffing for the formats Gemini accepts. */
-function sniffMime(bytes: Uint8Array): string {
-  if (bytes.length >= 8 &&
-      bytes[0] === 0x89 && bytes[1] === 0x50 &&
-      bytes[2] === 0x4e && bytes[3] === 0x47) return 'image/png';
-  if (bytes.length >= 3 &&
-      bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return 'image/jpeg';
-  if (bytes.length >= 12 &&
-      bytes[8] === 0x57 && bytes[9] === 0x45 &&
-      bytes[10] === 0x42 && bytes[11] === 0x50) return 'image/webp';
-  return 'image/jpeg';
-}
-
-function bytesToBase64(bytes: Uint8Array): string {
-  let s = '';
-  const CHUNK = 0x8000;
-  for (let i = 0; i < bytes.length; i += CHUNK) {
-    s += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
-  }
-  return btoa(s);
-}
-
-function base64ToBytes(b64: string): Uint8Array {
-  const bin = atob(b64);
-  const out = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-  return out;
 }
 
 export default process;

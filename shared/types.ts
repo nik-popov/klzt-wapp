@@ -8,6 +8,8 @@ export type ItemStatus = 'raw' | 'processing' | 'ready';
  * own column once you need to query/index by it.
  */
 export interface ItemMetadata {
+  /** Short, human-friendly name, e.g. "Navy denim jacket". 2-5 words. */
+  title?: string;
   brand?: string;
   color?: string;
   pattern?: string;
@@ -16,9 +18,12 @@ export interface ItemMetadata {
   fit?: string;
   occasion?: string;
   size?: string;
-  tag?: string;
   season?: string;
+  /** Free-form descriptive tags surfaced as chips in the detail modal. */
+  tags?: string[];
   notes?: string;
+  /** Optional secondary photo (e.g. backside) for items shot from two angles. */
+  back_image_url?: string;
   [key: string]: unknown;
 }
 

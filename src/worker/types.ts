@@ -8,7 +8,10 @@ export interface Env {
   AUTH_TOKEN?: string;
   R2_PUBLIC_BASE_URL?: string;
   GEMINI_API_KEY?: string;
+  /** Image-gen model for Magic Fix. Defaults to gemini-2.5-flash-image. */
   GEMINI_MODEL?: string;
+  /** Vision/text model for auto-analysis. Defaults to gemini-2.5-flash. */
+  GEMINI_TEXT_MODEL?: string;
 }
 
 /** Raw row shape as returned by D1. metadata is a JSON string or null. */

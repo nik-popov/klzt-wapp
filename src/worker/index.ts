@@ -35,7 +35,11 @@ app.get('/api/r2/*', async (c) => {
   const headers = new Headers();
   object.writeHttpMetadata(headers);
   headers.set('etag', object.httpEtag);
-  headers.set('cache-control', 'private, max-age=3600');
+  // R2 keys are content-addressed (per-item uuid) and never overwritten,
+  // so we can let Cloudflare's edge cache hold them forever. Switching
+  // from `private` to `public` is the single biggest perf win for the
+  // gallery — first hit per region warms the edge, the rest are local.
+  headers.set('cache-control', 'public, max-age=31536000, immutable');
   return new Response(object.body, { headers });
 });
 

@@ -19,7 +19,7 @@ APP_ENV = "dev"
 [[d1_databases]]
 binding = "DB"
 database_name = "klzt"
-database_id = "00000000-0000-0000-0000-000000000000"
+database_id = "f31f81b0-639a-45fb-bfa8-2f4df5bf09dc"
 migrations_dir = "migrations"
 
 [[r2_buckets]]
