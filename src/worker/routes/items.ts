@@ -1,10 +1,18 @@
 import { Hono } from 'hono';
 import type { Env } from '../types';
 import { rowToItem } from '../types';
-import { deleteItem, getItem, listItems, reorderItems } from '../db/queries';
+import {
+  deleteItem,
+  getItem,
+  listItems,
+  reorderItems,
+  updateItemMetadata,
+} from '../db/queries';
 import { keyFromUrl } from '../lib/storage';
 import type {
   ListItemsResponse,
+  PatchItemRequest,
+  PatchItemResponse,
   ReorderRequest,
   ReorderResponse,
 } from '@shared/types';
@@ -48,6 +56,44 @@ items.put('/reorder', async (c) => {
       400,
     );
   }
+});
+
+/**
+ * PATCH /api/items/:id
+ * Body: { metadata: Partial<ItemMetadata> }
+ *
+ * Shallow-merges the patch into the existing metadata JSON. Used for
+ * inline rename, rotation, and (in later phases) field/tag edits.
+ */
+items.patch('/:id', async (c) => {
+  const id = c.req.param('id');
+  const row = await getItem(c.env, id);
+  if (!row) return c.json({ error: 'Item not found' }, 404);
+
+  let payload: PatchItemRequest;
+  try {
+    payload = (await c.req.json()) as PatchItemRequest;
+  } catch {
+    return c.json({ error: 'Invalid JSON body' }, 400);
+  }
+  if (
+    !payload ||
+    typeof payload.metadata !== 'object' ||
+    payload.metadata === null ||
+    Array.isArray(payload.metadata)
+  ) {
+    return c.json({ error: 'Body must be { metadata: object }' }, 400);
+  }
+
+  const updated = await updateItemMetadata(
+    c.env,
+    id,
+    payload.metadata as Record<string, unknown>,
+  );
+  if (!updated) return c.json({ error: 'Item not found' }, 404);
+
+  const body: PatchItemResponse = { item: rowToItem(updated) };
+  return c.json(body);
 });
 
 /**

@@ -25,12 +25,37 @@ import type { ProcessResponse } from '@shared/types';
 
 const process = new Hono<{ Bindings: Env }>();
 
-/** User-provided prompt that produces clean product photos in manual testing. */
-const MAGIC_FIX_PROMPT =
-  'Make this a clean product photo with a plain white background. ' +
-  'Keep the garment realistic and accurate to the original photo. ' +
-  'Centered composition, soft even lighting, sharp focus, true colors, ' +
-  'e-commerce catalog style.';
+/**
+ * Flat-lay product-photo prompt. Targets ZARA / Aritzia / Net-a-Porter
+ * style catalog shots: garment arranged flat on a near-white surface,
+ * top-down framing, soft natural shadow. Explicitly forbids models,
+ * mannequins, hangers and props so the result reads as a real product
+ * photo rather than a background-erased snapshot.
+ */
+const MAGIC_FIX_PROMPT = [
+  'Recreate this garment as a premium flat-lay product photo for an',
+  'e-commerce catalog (think ZARA, Aritzia, Net-a-Porter).',
+  '',
+  'Composition:',
+  '- Top-down camera angle, garment laid flat and centered.',
+  '- Arrange the fabric to show the full silhouette: sleeves spread,',
+  '  collar/neckline visible, hem straight, any hardware (buttons, zips)',
+  '  legible.',
+  '- Add a soft, realistic natural shadow under the fabric for depth.',
+  '',
+  'Background and lighting:',
+  '- Pale, almost-white neutral surface (subtle warm or cool gray, no',
+  '  pure #FFFFFF). No props, no hangers, no model, no mannequin.',
+  '- Soft, even, diffused studio lighting. Sharp focus throughout.',
+  '',
+  'Fidelity rules (most important):',
+  '- Keep colors, prints, fabric texture, stitching and proportions',
+  '  exactly as in the original photo.',
+  '- Do not invent new details, do not restyle the garment, do not crop',
+  '  out any part of it.',
+  '- If the original is wrinkled, gently smooth it; do not iron away',
+  '  intentional structure (pleats, drape, distressing).',
+].join('\n');
 
 /**
  * POST /api/items/:id/process

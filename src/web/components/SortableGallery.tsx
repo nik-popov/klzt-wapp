@@ -74,12 +74,12 @@ export function SortableGallery({
     return (
       <div className="grid place-items-center py-24 text-center">
         <div className="max-w-sm">
-          <h2 className="text-base font-semibold text-neutral-700">
+          <h2 className="text-base font-semibold text-neutral-700 dark:text-neutral-200">
             Your closet is empty
           </h2>
-          <p className="mt-1 text-sm text-neutral-500">
-            Tap <span className="font-medium">Upload</span> to add photos.
-            Drag tiles to arrange them like the Photos app.
+          <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
+            Tap <span className="font-medium">+ Add items</span> to upload photos
+            or snap one with your camera. Drag tiles to arrange them.
           </p>
         </div>
       </div>

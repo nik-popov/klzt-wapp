@@ -24,6 +24,8 @@ export interface ItemMetadata {
   notes?: string;
   /** Optional secondary photo (e.g. backside) for items shot from two angles. */
   back_image_url?: string;
+  /** CSS-applied rotation in degrees. We don't re-encode the image. */
+  rotation?: 0 | 90 | 180 | 270;
   [key: string]: unknown;
 }
 
@@ -65,6 +67,14 @@ export interface ProcessResponse {
 export interface DeleteResponse {
   ok: true;
   id: string;
+  item: Item;
+}
+
+export interface PatchItemRequest {
+  metadata: Partial<ItemMetadata>;
+}
+
+export interface PatchItemResponse {
   item: Item;
 }
 

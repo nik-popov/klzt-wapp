@@ -1,6 +1,9 @@
 import type {
   DeleteResponse,
+  ItemMetadata,
   ListItemsResponse,
+  PatchItemRequest,
+  PatchItemResponse,
   ProcessResponse,
   ReorderRequest,
   ReorderResponse,
@@ -82,6 +85,15 @@ export const api = {
   process(id: string): Promise<ProcessResponse> {
     return request<ProcessResponse>(`/api/items/${encodeURIComponent(id)}/process`, {
       method: 'POST',
+    });
+  },
+
+  patchItem(id: string, metadata: Partial<ItemMetadata>): Promise<PatchItemResponse> {
+    const body: PatchItemRequest = { metadata };
+    return request<PatchItemResponse>(`/api/items/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
     });
   },
 

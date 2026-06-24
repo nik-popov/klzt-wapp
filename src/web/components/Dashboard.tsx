@@ -7,7 +7,9 @@ import {
   useDelete,
   useItems,
   useProcess,
+  useProcessAll,
   useReorder,
+  useUpdateItem,
 } from '../hooks/useItems';
 import { useUpload } from '../hooks/useUpload';
 
@@ -20,12 +22,19 @@ export function Dashboard() {
   const { data, isLoading, error } = useItems();
   const reorder = useReorder();
   const processMut = useProcess();
+  const processAll = useProcessAll();
   const deleteMut = useDelete();
+  const updateMut = useUpdateItem();
   const { upload, isUploading, progress, error: uploadError } = useUpload();
 
   const openItem = useMemo(
     () => data?.items.find((it) => it.id === openId) ?? null,
     [data, openId],
+  );
+
+  const rawIds = useMemo(
+    () => (data?.items ?? []).filter((it) => it.status === 'raw').map((it) => it.id),
+    [data],
   );
 
   // Native file drop: listen at window so the entire app is a target.
@@ -50,14 +59,16 @@ export function Dashboard() {
       dragDepth.current = Math.max(0, dragDepth.current - 1);
       if (dragDepth.current === 0) setIsDragging(false);
     };
-    const onDrop = (e: DragEvent) => {
+    const onDrop = async (e: DragEvent) => {
       if (!hasFiles(e)) return;
       e.preventDefault();
       dragDepth.current = 0;
       setIsDragging(false);
-      const files = e.dataTransfer?.files;
-      if (!files || files.length === 0) return;
-      const images = Array.from(files).filter((f) => f.type.startsWith('image/'));
+      const items = e.dataTransfer?.items;
+      const files: File[] = items
+        ? await collectFilesFromItems(items)
+        : Array.from(e.dataTransfer?.files ?? []);
+      const images = files.filter((f) => f.type.startsWith('image/'));
       if (images.length > 0) upload(images);
     };
 
@@ -78,9 +89,14 @@ export function Dashboard() {
       <ControlBar
         sortMode={sortMode}
         onSortChange={setSortMode}
-        onUpload={(files) => upload(files)}
+        onUploadFromDevice={(files) => upload(files)}
+        onTakePhoto={(files) => upload(files)}
         isUploading={isUploading}
-        progress={progress}
+        uploadProgress={progress}
+        rawCount={rawIds.length}
+        onProcessAll={() => processAll.run(rawIds)}
+        isProcessingAll={processAll.isProcessing}
+        processAllProgress={processAll.progress}
       />
 
       <main className="mx-auto max-w-6xl px-4 py-6">
@@ -98,9 +114,14 @@ export function Dashboard() {
             }
           />
         )}
+        {processAll.error && (
+          <ErrorBanner
+            message={`Magic Fix all: some items failed — ${processAll.error}`}
+          />
+        )}
 
         {isLoading ? (
-          <div className="py-24 text-center text-sm text-neutral-500">
+          <div className="py-24 text-center text-sm text-neutral-500 dark:text-neutral-400">
             Loading…
           </div>
         ) : (
@@ -119,6 +140,7 @@ export function Dashboard() {
         onClose={() => setOpenId(null)}
         onProcess={(id) => processMut.mutate(id)}
         onDelete={(id) => deleteMut.mutate(id)}
+        onUpdate={(id, metadata) => updateMut.mutate({ id, metadata })}
       />
 
       <div
@@ -143,8 +165,59 @@ export function Dashboard() {
 
 function ErrorBanner({ message }: { message: string }) {
   return (
-    <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+    <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200">
       {message}
     </div>
   );
+}
+
+/**
+ * Walk a DataTransferItemList (drop target) and collect every file,
+ * recursing into directories so users can drop a whole folder. Falls
+ * back to a flat list if the browser doesn't expose webkitGetAsEntry.
+ */
+async function collectFilesFromItems(list: DataTransferItemList): Promise<File[]> {
+  const files: File[] = [];
+  const entries: FileSystemEntry[] = [];
+  for (let i = 0; i < list.length; i++) {
+    const item = list[i];
+    if (item.kind !== 'file') continue;
+    const entry =
+      typeof (item as DataTransferItem).webkitGetAsEntry === 'function'
+        ? item.webkitGetAsEntry()
+        : null;
+    if (entry) {
+      entries.push(entry);
+    } else {
+      const file = item.getAsFile();
+      if (file) files.push(file);
+    }
+  }
+  for (const entry of entries) {
+    await walkEntry(entry, files);
+  }
+  return files;
+}
+
+async function walkEntry(entry: FileSystemEntry, sink: File[]): Promise<void> {
+  if (entry.isFile) {
+    const fileEntry = entry as FileSystemFileEntry;
+    const file = await new Promise<File>((resolve, reject) =>
+      fileEntry.file(resolve, reject),
+    );
+    sink.push(file);
+    return;
+  }
+  if (entry.isDirectory) {
+    const dirEntry = entry as FileSystemDirectoryEntry;
+    const reader = dirEntry.createReader();
+    // readEntries can return chunks; loop until empty.
+    while (true) {
+      const chunk = await new Promise<FileSystemEntry[]>((resolve, reject) =>
+        reader.readEntries(resolve, reject),
+      );
+      if (chunk.length === 0) break;
+      for (const e of chunk) await walkEntry(e, sink);
+    }
+  }
 }

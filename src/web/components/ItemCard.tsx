@@ -40,6 +40,10 @@ export function ItemCard({ item, onProcess, onOpen, sortable = true }: ItemCardP
     (typeof item.metadata?.brand === 'string' && item.metadata.brand) ||
     'Untitled';
 
+  const rotation = normalizeRotation(item.metadata?.rotation);
+  const imgStyle: React.CSSProperties =
+    rotation === 0 ? {} : { transform: `rotate(${rotation}deg)` };
+
   return (
     <div
       ref={setNodeRef}
@@ -71,7 +75,8 @@ export function ItemCard({ item, onProcess, onOpen, sortable = true }: ItemCardP
         }}
         className={clsx(
           'relative aspect-square overflow-hidden rounded-xl border border-neutral-200 bg-neutral-100 shadow-sm transition',
-          'group-hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/30',
+          'dark:border-neutral-800 dark:bg-neutral-900',
+          'group-hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/30 dark:focus-visible:ring-white/30',
           sortable ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer',
         )}
       >
@@ -80,6 +85,7 @@ export function ItemCard({ item, onProcess, onOpen, sortable = true }: ItemCardP
           alt={title}
           loading="lazy"
           draggable={false}
+          style={imgStyle}
           className="h-full w-full select-none object-cover"
         />
 
@@ -90,6 +96,7 @@ export function ItemCard({ item, onProcess, onOpen, sortable = true }: ItemCardP
             <button
               type="button"
               onPointerDown={(e) => e.stopPropagation()}
+              onPointerUp={(e) => e.stopPropagation()}
               onClick={(e) => {
                 e.stopPropagation();
                 onProcess(item.id);
@@ -106,6 +113,7 @@ export function ItemCard({ item, onProcess, onOpen, sortable = true }: ItemCardP
             <button
               type="button"
               onPointerDown={(e) => e.stopPropagation()}
+              onPointerUp={(e) => e.stopPropagation()}
               onClick={(e) => {
                 e.stopPropagation();
                 onProcess(item.id);
@@ -118,33 +126,47 @@ export function ItemCard({ item, onProcess, onOpen, sortable = true }: ItemCardP
         )}
 
         {item.status === 'processing' && (
-          <div className="absolute inset-0 flex items-center justify-center bg-white/60 backdrop-blur-sm">
+          <div className="absolute inset-0 flex items-center justify-center bg-white/60 backdrop-blur-sm dark:bg-neutral-950/60">
             <Spinner />
           </div>
         )}
       </div>
 
-      <div className="truncate px-1 text-xs font-medium text-neutral-700" title={title}>
+      <div
+        className="truncate px-1 text-xs font-medium text-neutral-700 dark:text-neutral-300"
+        title={title}
+      >
         {title}
       </div>
     </div>
   );
 }
 
+function normalizeRotation(value: unknown): 0 | 90 | 180 | 270 {
+  if (value === 90 || value === 180 || value === 270) return value;
+  return 0;
+}
+
+const STATUS_LABEL: Record<Item['status'], string> = {
+  raw: 'Original',
+  processing: 'Working magic',
+  ready: 'Ready',
+};
+
 function StatusBadge({ status }: { status: Item['status'] }) {
   const map: Record<Item['status'], string> = {
-    raw: 'bg-amber-100 text-amber-900',
-    processing: 'bg-sky-100 text-sky-900',
-    ready: 'bg-emerald-100 text-emerald-900',
+    raw: 'bg-amber-100 text-amber-900 dark:bg-amber-900/50 dark:text-amber-100',
+    processing: 'bg-sky-100 text-sky-900 dark:bg-sky-900/50 dark:text-sky-100',
+    ready: 'bg-emerald-100 text-emerald-900 dark:bg-emerald-900/50 dark:text-emerald-100',
   };
   return (
     <span
       className={clsx(
-        'absolute left-2 top-2 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide shadow-sm',
+        'absolute left-2 top-2 rounded-full px-2 py-0.5 text-[10px] font-medium tracking-wide shadow-sm',
         map[status],
       )}
     >
-      {status}
+      {STATUS_LABEL[status]}
     </span>
   );
 }
@@ -154,7 +176,7 @@ function Spinner() {
     <span
       role="status"
       aria-label="Processing"
-      className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-neutral-300 border-t-neutral-700"
+      className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-neutral-300 border-t-neutral-700 dark:border-neutral-700 dark:border-t-neutral-200"
     />
   );
 }
