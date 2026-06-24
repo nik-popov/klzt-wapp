@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import clsx from 'clsx';
 import { getThemePref, setThemePref, type ThemePref } from '../lib/theme';
 import { useCurrentUser, useLogout } from '../hooks/useAuth';
@@ -278,13 +279,17 @@ function SettingsDrawer({ open, onClose }: DrawerProps) {
     window.localStorage.setItem(SETTINGS_KEYS.magicFix, next);
   };
 
-  return (
+  // Rendered through a portal so the drawer escapes the sticky header's
+  // stacking context — otherwise its z-index is trapped behind
+  // root-level fixed elements like the drag-drop overlay.
+  if (typeof document === 'undefined') return null;
+  return createPortal(
     <>
       <div
         aria-hidden
         onClick={onClose}
         className={clsx(
-          'fixed inset-0 z-40 bg-black/40 transition-opacity',
+          'fixed inset-0 z-[60] bg-black/40 transition-opacity',
           open ? 'opacity-100' : 'pointer-events-none opacity-0',
         )}
       />
@@ -293,7 +298,7 @@ function SettingsDrawer({ open, onClose }: DrawerProps) {
         aria-label="Settings"
         aria-modal="true"
         className={clsx(
-          'fixed right-0 top-0 z-50 flex h-full w-full max-w-sm flex-col overflow-y-auto border-l border-neutral-200 bg-white shadow-2xl transition-transform duration-200 dark:border-neutral-800 dark:bg-neutral-950',
+          'fixed right-0 top-0 z-[70] flex h-full w-full max-w-sm flex-col overflow-y-auto border-l border-neutral-200 bg-white shadow-2xl transition-transform duration-200 dark:border-neutral-800 dark:bg-neutral-950',
           open ? 'translate-x-0' : 'translate-x-full',
         )}
       >
@@ -377,7 +382,8 @@ function SettingsDrawer({ open, onClose }: DrawerProps) {
           </Section>
         </div>
       </aside>
-    </>
+    </>,
+    document.body,
   );
 }
 
