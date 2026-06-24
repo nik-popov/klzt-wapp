@@ -1,30 +1,61 @@
 import type { MiddlewareHandler } from 'hono';
-import type { Env } from '../types';
+import type { Env, UserRow, Variables } from '../types';
+import { rowToUser } from '../types';
+import {
+  createUser,
+  ensureDefaultCloset,
+  getSessionWithUser,
+  getUserByEmail,
+} from '../db/queries';
+import { SESSION_COOKIE, parseCookie } from '../lib/auth';
 
 /**
- * Bearer-token middleware for /api/*.
+ * Cookie-session middleware for /api/*.
  *
- * Behavior:
- *   - If AUTH_TOKEN is set, requires `Authorization: Bearer <AUTH_TOKEN>`.
- *   - If AUTH_TOKEN is unset/empty AND APP_ENV === 'dev', auth is bypassed
- *     so local development works out of the box.
- *   - In any other env without a token, requests are rejected (fail closed).
+ * Order of resolution:
+ *   1. DEV_USER_EMAIL set       -> bypass cookie; auto-create that user
+ *      so local `wrangler dev` works without Google credentials.
+ *   2. klzt_session cookie set  -> resolve session row + user.
+ *   3. Otherwise                -> 401 Unauthorized.
+ *
+ * On success the user + default closet id are attached to the request
+ * context for downstream handlers (`c.get('user')`, `c.get('closetId')`).
  */
-export const auth = (): MiddlewareHandler<{ Bindings: Env }> => {
+export const auth = (): MiddlewareHandler<{ Bindings: Env; Variables: Variables }> => {
   return async (c, next) => {
-    const configured = c.env.AUTH_TOKEN?.trim();
+    let userRow: UserRow | null = null;
 
-    if (!configured) {
-      if (c.env.APP_ENV === 'dev') return next();
-      return c.json({ error: 'Server auth not configured' }, 500);
+    const devEmail = c.env.DEV_USER_EMAIL?.trim();
+    if (devEmail) {
+      userRow = await ensureDevUser(c.env, devEmail);
+    } else {
+      const cookie = parseCookie(c.req.header('cookie'), SESSION_COOKIE);
+      if (cookie) {
+        const result = await getSessionWithUser(c.env, cookie);
+        if (result) userRow = result.user;
+      }
     }
 
-    const header = c.req.header('Authorization') ?? '';
-    const [scheme, token] = header.split(' ');
-    if (scheme !== 'Bearer' || !token || token !== configured) {
-      return c.json({ error: 'Unauthorized' }, 401);
-    }
+    if (!userRow) return c.json({ error: 'Unauthorized' }, 401);
 
+    const closet = await ensureDefaultCloset(c.env, userRow.id);
+    c.set('user', rowToUser(userRow));
+    c.set('closetId', closet.id);
     return next();
   };
 };
+
+/**
+ * Find or create the dev-mode user. Keyed by email so the same dev
+ * identity persists across `wrangler dev` restarts.
+ */
+async function ensureDevUser(env: Env, email: string): Promise<UserRow> {
+  const existing = await getUserByEmail(env, email);
+  if (existing) return existing;
+  return createUser(env, {
+    id: crypto.randomUUID(),
+    google_sub: `dev:${email}`,
+    email,
+    name: 'Dev user',
+  });
+}

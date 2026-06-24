@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import type { Env, ItemRow } from '../types';
+import type { Env, ItemRow, Variables } from '../types';
 import { rowToItem } from '../types';
 import {
   getItem,
@@ -23,7 +23,7 @@ import {
 } from '../lib/gemini';
 import type { ProcessResponse } from '@shared/types';
 
-const process = new Hono<{ Bindings: Env }>();
+const process = new Hono<{ Bindings: Env; Variables: Variables }>();
 
 /**
  * Flat-lay product-photo prompt. Targets ZARA / Aritzia / Net-a-Porter
@@ -69,12 +69,13 @@ const MAGIC_FIX_PROMPT = [
  *   4. Re-analyze the processed image to refresh title/tags/attrs.
  */
 process.post('/:id/process', async (c) => {
+  const user = c.get('user');
   const id = c.req.param('id');
-  const row = await getItem(c.env, id);
+  const row = await getItem(c.env, id, user.id);
   if (!row) return c.json({ error: 'Item not found' }, 404);
 
   const prevStatus = row.status;
-  await updateItemStatus(c.env, id, 'processing');
+  await updateItemStatus(c.env, id, user.id, 'processing');
 
   let srcBytes: Uint8Array;
   let srcMime: string;
@@ -83,7 +84,7 @@ process.post('/:id/process', async (c) => {
     srcBytes = loaded.bytes;
     srcMime = loaded.mime;
   } catch (err) {
-    await updateItemStatus(c.env, id, prevStatus);
+    await updateItemStatus(c.env, id, user.id, prevStatus);
     return c.json(
       { error: err instanceof Error ? err.message : 'Failed to load raw image' },
       500,
@@ -105,10 +106,10 @@ process.post('/:id/process', async (c) => {
   }
 
   const outExt = imageExtFromMime(outMime);
-  const destKey = processedKey(id, outExt);
+  const destKey = processedKey(user.id, id, outExt);
   await c.env.BUCKET.put(destKey, outBytes, {
     httpMetadata: { contentType: outMime },
-    customMetadata: { itemId: id, processedBy },
+    customMetadata: { itemId: id, userId: user.id, processedBy },
   });
 
   // Cache-bust: same R2 key on re-fix would return the same URL and the
@@ -118,6 +119,7 @@ process.post('/:id/process', async (c) => {
   let updated = await updateItemProcessed(
     c.env,
     id,
+    user.id,
     versionedUrl,
     'ready',
   );
@@ -128,7 +130,7 @@ process.post('/:id/process', async (c) => {
   try {
     const meta = await analyzeImage(c.env, outBytes, outMime);
     if (meta && Object.keys(meta).length > 0) {
-      const reanalyzed = await updateItemMetadata(c.env, id, meta);
+      const reanalyzed = await updateItemMetadata(c.env, id, user.id, meta);
       if (reanalyzed) updated = reanalyzed;
     }
   } catch (err) {

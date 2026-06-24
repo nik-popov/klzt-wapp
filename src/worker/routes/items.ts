@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import type { Env } from '../types';
+import type { Env, Variables } from '../types';
 import { rowToItem } from '../types';
 import {
   deleteItem,
@@ -17,11 +17,12 @@ import type {
   ReorderResponse,
 } from '@shared/types';
 
-const items = new Hono<{ Bindings: Env }>();
+const items = new Hono<{ Bindings: Env; Variables: Variables }>();
 
-/** GET /api/items — all items, ordered by sort_order ASC. */
+/** GET /api/items — all of the current user's items, sort_order ASC. */
 items.get('/', async (c) => {
-  const rows = await listItems(c.env);
+  const user = c.get('user');
+  const rows = await listItems(c.env, user.id);
   const body: ListItemsResponse = { items: rows.map(rowToItem) };
   return c.json(body);
 });
@@ -29,9 +30,9 @@ items.get('/', async (c) => {
 /**
  * PUT /api/items/reorder
  * Body: { ids: string[] } in the new desired order.
- * Runs a single DB.batch transaction.
  */
 items.put('/reorder', async (c) => {
+  const user = c.get('user');
   let payload: ReorderRequest;
   try {
     payload = (await c.req.json()) as ReorderRequest;
@@ -47,7 +48,7 @@ items.put('/reorder', async (c) => {
   }
 
   try {
-    const count = await reorderItems(c.env, payload.ids);
+    const count = await reorderItems(c.env, user.id, payload.ids);
     const body: ReorderResponse = { ok: true, count };
     return c.json(body);
   } catch (err) {
@@ -66,8 +67,9 @@ items.put('/reorder', async (c) => {
  * inline rename, rotation, and (in later phases) field/tag edits.
  */
 items.patch('/:id', async (c) => {
+  const user = c.get('user');
   const id = c.req.param('id');
-  const row = await getItem(c.env, id);
+  const row = await getItem(c.env, id, user.id);
   if (!row) return c.json({ error: 'Item not found' }, 404);
 
   let payload: PatchItemRequest;
@@ -88,6 +90,7 @@ items.patch('/:id', async (c) => {
   const updated = await updateItemMetadata(
     c.env,
     id,
+    user.id,
     payload.metadata as Record<string, unknown>,
   );
   if (!updated) return c.json({ error: 'Item not found' }, 404);
@@ -103,8 +106,9 @@ items.patch('/:id', async (c) => {
  * cleanup automatically since keyFromUrl returns null for them.
  */
 items.delete('/:id', async (c) => {
+  const user = c.get('user');
   const id = c.req.param('id');
-  const row = await getItem(c.env, id);
+  const row = await getItem(c.env, id, user.id);
   if (!row) return c.json({ error: 'Item not found' }, 404);
 
   const keys = [
@@ -113,11 +117,10 @@ items.delete('/:id', async (c) => {
   ].filter((k): k is string => Boolean(k));
 
   if (keys.length > 0) {
-    // R2Bucket.delete accepts a single key or an array (up to 1000).
     await c.env.BUCKET.delete(keys);
   }
 
-  const removed = await deleteItem(c.env, id);
+  const removed = await deleteItem(c.env, id, user.id);
   if (!removed) return c.json({ error: 'Item not found' }, 404);
 
   return c.json({ ok: true, id, item: rowToItem(row) });

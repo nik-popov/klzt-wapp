@@ -2,6 +2,8 @@ import type {
   DeleteResponse,
   ItemMetadata,
   ListItemsResponse,
+  LogoutResponse,
+  MeResponse,
   PatchItemRequest,
   PatchItemResponse,
   ProcessResponse,
@@ -9,18 +11,6 @@ import type {
   ReorderResponse,
   UploadResponse,
 } from '@shared/types';
-
-const TOKEN_KEY = 'klzt.authToken';
-
-export function getAuthToken(): string {
-  if (typeof window === 'undefined') return '';
-  return window.localStorage.getItem(TOKEN_KEY) ?? '';
-}
-
-export function setAuthToken(token: string): void {
-  if (token) window.localStorage.setItem(TOKEN_KEY, token);
-  else window.localStorage.removeItem(TOKEN_KEY);
-}
 
 class ApiError extends Error {
   constructor(public status: number, message: string) {
@@ -34,10 +24,13 @@ async function request<T>(
 ): Promise<T> {
   const headers = new Headers(init.headers);
   if (!headers.has('Accept')) headers.set('Accept', 'application/json');
-  const token = getAuthToken();
-  if (token) headers.set('Authorization', `Bearer ${token}`);
 
-  const res = await fetch(path, { ...init, headers });
+  const res = await fetch(path, {
+    ...init,
+    headers,
+    // Always include the session cookie on same-origin /api calls.
+    credentials: 'include',
+  });
   const text = await res.text();
   const json = text ? safeParse(text) : null;
 
@@ -60,6 +53,21 @@ function safeParse(text: string): unknown {
 }
 
 export const api = {
+  /* ----------- Auth ----------- */
+  me(): Promise<MeResponse> {
+    return request<MeResponse>('/api/auth/me');
+  },
+
+  logout(): Promise<LogoutResponse> {
+    return request<LogoutResponse>('/api/auth/logout', { method: 'POST' });
+  },
+
+  /** Full-page navigation to start the Google OAuth flow. */
+  loginUrl(): string {
+    return '/api/auth/login';
+  },
+
+  /* ----------- Items ----------- */
   listItems(): Promise<ListItemsResponse> {
     return request<ListItemsResponse>('/api/items');
   },

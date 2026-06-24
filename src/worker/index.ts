@@ -1,18 +1,22 @@
 import { Hono } from 'hono';
-import type { Env } from './types';
+import type { Env, Variables } from './types';
 import { auth } from './middleware/auth';
+import authRoutes from './routes/auth';
 import uploadRoutes from './routes/upload';
 import itemsRoutes from './routes/items';
 import processRoutes from './routes/process';
+import { getItemRaw } from './db/queries';
+import { itemIdFromKey, keyBelongsToUser } from './lib/storage';
 
-const app = new Hono<{ Bindings: Env }>();
+const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 
-// All /api/* routes require auth (bypassed in dev when AUTH_TOKEN unset).
-app.use('/api/*', auth());
-
+// Health + auth flow are public. Everything else under /api/* requires a session.
 app.get('/api/health', (c) =>
   c.json({ ok: true, env: c.env.APP_ENV ?? 'unknown' }),
 );
+app.route('/api/auth', authRoutes);
+
+app.use('/api/*', auth());
 
 app.route('/api/upload', uploadRoutes);
 app.route('/api/items', itemsRoutes);
@@ -20,14 +24,31 @@ app.route('/api/items', processRoutes);
 
 /**
  * GET /api/r2/* — stream private R2 objects through the Worker.
- * Only used when R2_PUBLIC_BASE_URL isn't configured. Keep the route
- * authed to avoid making the bucket effectively public-via-Worker.
+ *
+ * Ownership rules:
+ *   - Keys under `users/<currentUserId>/...` are always served.
+ *   - Legacy keys (`raw/items/<id>.ext`, `processed/items/<id>.ext`)
+ *     resolve to an item id; we look it up and serve only if the item
+ *     belongs to the current user.
+ *   - Anything else 404s — never serve another user's bytes by URL.
  */
 app.get('/api/r2/*', async (c) => {
-  // Strip the "/api/r2/" prefix to get the object key.
   const url = new URL(c.req.url);
   const key = decodeURIComponent(url.pathname.replace(/^\/api\/r2\//, ''));
   if (!key) return c.json({ error: 'Missing key' }, 400);
+
+  const user = c.get('user');
+  let allowed = keyBelongsToUser(key, user.id);
+
+  if (!allowed) {
+    const itemId = itemIdFromKey(key);
+    if (itemId) {
+      const row = await getItemRaw(c.env, itemId);
+      if (row && row.user_id === user.id) allowed = true;
+    }
+  }
+
+  if (!allowed) return c.json({ error: 'Not found' }, 404);
 
   const object = await c.env.BUCKET.get(key);
   if (!object) return c.json({ error: 'Not found' }, 404);
@@ -35,17 +56,12 @@ app.get('/api/r2/*', async (c) => {
   const headers = new Headers();
   object.writeHttpMetadata(headers);
   headers.set('etag', object.httpEtag);
-  // R2 keys are content-addressed (per-item uuid) and never overwritten,
-  // so we can let Cloudflare's edge cache hold them forever. Switching
-  // from `private` to `public` is the single biggest perf win for the
-  // gallery — first hit per region warms the edge, the rest are local.
+  // Per-item uuids are stable; cache aggressively at the edge.
   headers.set('cache-control', 'public, max-age=31536000, immutable');
   return new Response(object.body, { headers });
 });
 
 app.notFound((c) => {
-  // Only API 404s reach here; SPA paths fall through to ASSETS via the
-  // assets binding's not_found_handling = "single-page-application".
   if (c.req.path.startsWith('/api/')) {
     return c.json({ error: 'Not found' }, 404);
   }

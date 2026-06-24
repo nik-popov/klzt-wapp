@@ -36,12 +36,17 @@ export function extFromMime(mime: string): string {
   }
 }
 
-export function rawKey(id: string, ext: string): string {
-  return `raw/items/${id}.${ext}`;
+/**
+ * R2 key for a user's raw upload. Pre-Phase-2 items live at the legacy
+ * `raw/items/{id}.{ext}` path; new uploads land under `users/{userId}/`
+ * so multi-tenant data stays naturally segregated.
+ */
+export function rawKey(userId: string, id: string, ext: string): string {
+  return `users/${userId}/raw/items/${id}.${ext}`;
 }
 
-export function processedKey(id: string, ext: string): string {
-  return `processed/items/${id}.${ext}`;
+export function processedKey(userId: string, id: string, ext: string): string {
+  return `users/${userId}/processed/items/${id}.${ext}`;
 }
 
 /**
@@ -63,8 +68,6 @@ export function publicUrlForKey(env: Env, key: string): string {
  */
 export function keyFromUrl(env: Env, url: string | null | undefined): string | null {
   if (!url) return null;
-  // Strip any cache-busting query string (e.g. ?v=1719090000000) before
-  // matching. R2 keys never contain '?'.
   const clean = url.split('?')[0];
   if (clean.startsWith('/api/r2/')) {
     return decodeURIComponent(clean.slice('/api/r2/'.length));
@@ -76,3 +79,22 @@ export function keyFromUrl(env: Env, url: string | null | undefined): string | n
   }
   return null;
 }
+
+/**
+ * Extract the item id encoded in an R2 key, if the key follows our
+ * naming convention. Both legacy (`raw/items/{id}.{ext}`) and scoped
+ * (`users/{uid}/raw/items/{id}.{ext}`) layouts are recognized so old
+ * URLs keep resolving after Phase 2.
+ */
+export function itemIdFromKey(key: string): string | null {
+  const match = key.match(
+    /(?:^users\/[^/]+\/)?(?:raw|processed)\/items\/([^/.]+)\.[A-Za-z0-9]+$/,
+  );
+  return match ? match[1] : null;
+}
+
+/** True when the key lives under this user's namespace. */
+export function keyBelongsToUser(key: string, userId: string): boolean {
+  return key.startsWith(`users/${userId}/`);
+}
+

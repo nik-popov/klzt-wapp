@@ -82,3 +82,20 @@ export interface ApiErrorBody {
   error: string;
   details?: unknown;
 }
+
+/* -------------------------- Auth / accounts -------------------------- */
+
+export interface User {
+  id: string;
+  email: string;
+  name: string | null;
+  picture: string | null;
+}
+
+export interface MeResponse {
+  user: User;
+}
+
+export interface LogoutResponse {
+  ok: true;
+}

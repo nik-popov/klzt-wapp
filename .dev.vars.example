@@ -1,12 +1,40 @@
 # Copy to .dev.vars (gitignored) for `wrangler dev`.
-# Leave AUTH_TOKEN empty to disable auth in local dev.
-AUTH_TOKEN=""
+#
+# Phase 2 replaced the shared bearer token with Google OAuth. For local
+# dev you have two choices:
+#   1. Set DEV_USER_EMAIL=you@example.com to bypass OAuth entirely
+#      (recommended — no Google credentials needed).
+#   2. Configure GOOGLE_CLIENT_ID/SECRET/REDIRECT_URI to test the full
+#      sign-in flow against a Google Cloud OAuth client.
 
+# Local-only shortcut: when set, every API call runs as this user
+# (auto-created on first request). Never set this in production.
+DEV_USER_EMAIL=""
+
+# --- Google OAuth (production / full flow) -----------------------------
+# Create an OAuth 2.0 Client (type: Web application) at
+# https://console.cloud.google.com/apis/credentials and add:
+#   Authorized redirect URI: https://<your-worker>/api/auth/callback
+#                            (and http://localhost:5173/api/auth/callback for dev)
+GOOGLE_CLIENT_ID=""
+GOOGLE_CLIENT_SECRET=""
+# Optional explicit override; otherwise derived from the request origin.
+GOOGLE_REDIRECT_URI=""
+
+# Session cookie lifetime in days. Default 30.
+SESSION_TTL_DAYS=""
+
+# The first user to sign in whose email matches this value claims the
+# bootstrap admin row, inheriting all pre-Phase-2 seed items.
+BOOTSTRAP_USER_EMAIL=""
+
+# --- Storage -----------------------------------------------------------
 # Optional. If the R2 bucket is fronted by a public custom domain,
 # set this and image URLs will point there directly instead of
 # being proxied through the Worker (/api/r2/<key>).
 R2_PUBLIC_BASE_URL=""
 
+# --- Gemini (Magic Fix + auto-tagging) --------------------------------
 # Magic Fix — Google Gemini 2.5 Flash Image (Nano Banana).
 # Get a free key at https://aistudio.google.com/apikey
 # When empty, Magic Fix falls back to a no-op byte copy.
@@ -17,3 +45,7 @@ GEMINI_API_KEY=""
 # GEMINI_TEXT_MODEL  -> auto-analysis    (default: gemini-2.5-flash)
 GEMINI_MODEL=""
 GEMINI_TEXT_MODEL=""
+
+# --- Legacy ------------------------------------------------------------
+# Pre-Phase-2 shared bearer token. No longer enforced. Safe to remove.
+AUTH_TOKEN=""
